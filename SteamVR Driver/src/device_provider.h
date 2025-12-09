@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "controller_device_driver.h"
+#include "hand_tracking_listener.h"
 #include "openvr_driver.h"
 
 // make sure your class is publicly inheriting vr::IServerTrackedDeviceProvider!
@@ -24,4 +25,5 @@ public:
 private:
 	std::unique_ptr<MyControllerDeviceDriver> my_left_controller_device_;
 	std::unique_ptr<MyControllerDeviceDriver> my_right_controller_device_;
+	std::unique_ptr<HandTrackingListener> hand_tracking_listener_;
 };

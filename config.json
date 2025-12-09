@@ -1,0 +1,33 @@
+{
+  "camera": {
+    "device_id": 0,
+    "width": 640,
+    "height": 480,
+    "fps": 60,
+    "flip_horizontal": true
+  },
+  "tracking": {
+    "max_hands": 2,
+    "detection_confidence": 0.7,
+    "tracking_confidence": 0.5,
+    "model_complexity": 1
+  },
+  "network": {
+    "host": "127.0.0.1",
+    "port": 65432
+  },
+  "gestures": {
+    "pinch_threshold": 0.05,
+    "finger_extended_threshold": 0.6
+  },
+  "calibration": {
+    "position_offset": [0.0, 0.0, 0.0],
+    "scale": 1.0
+  },
+  "debug": {
+    "show_video": true,
+    "show_landmarks": true,
+    "show_fps": true,
+    "log_gestures": false
+  }
+}
