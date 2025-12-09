@@ -44,6 +44,14 @@ vr::EVRInitError MyDeviceProvider::Init( vr::IVRDriverContext *pDriverContext )
 		return vr::VRInitError_Driver_Unknown;
 	}
 
+	// Start hand tracking listener
+	hand_tracking_listener_ = std::make_unique<HandTrackingListener>( my_left_controller_device_.get(), my_right_controller_device_.get() );
+	if ( !hand_tracking_listener_->Start( 65432 ) )
+	{
+		DriverLog( "Warning: Failed to start hand tracking listener. Hand tracking data will not be received." );
+		// Don't fail initialization, just log the warning
+	}
+
 	return vr::VRInitError_None;
 }
 
@@ -121,6 +129,9 @@ void MyDeviceProvider::LeaveStandby()
 //-----------------------------------------------------------------------------
 void MyDeviceProvider::Cleanup()
 {
+	// Stop hand tracking listener first
+	hand_tracking_listener_ = nullptr;
+
 	// Our controller devices will have already deactivated. Let's now destroy them.
 	my_left_controller_device_ = nullptr;
 	my_right_controller_device_ = nullptr;

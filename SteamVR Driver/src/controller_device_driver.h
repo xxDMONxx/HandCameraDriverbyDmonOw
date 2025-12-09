@@ -16,6 +16,8 @@ enum MyComponent
 	MyComponent_trigger_value,
 	MyComponent_trigger_click,
 
+	MyComponent_grip_value,
+
 	MyComponent_haptic,
 
 	MyComponent_MAX
@@ -52,6 +54,12 @@ public:
 
 	void MyPoseUpdateThread();
 
+	// Hand tracking data update methods
+	void UpdateHandPosition( float x, float y, float z );
+	void UpdateHandRotation( float qw, float qx, float qy, float qz );
+	void UpdateTriggerValue( float value );
+	void UpdateGripValue( float value );
+
 private:
 	std::atomic< vr::TrackedDeviceIndex_t > my_controller_index_;
 
@@ -64,4 +72,15 @@ private:
 
 	std::atomic< bool > is_active_;
 	std::thread my_pose_update_thread_;
+
+	// Hand tracking data
+	std::atomic< float > hand_position_x_;
+	std::atomic< float > hand_position_y_;
+	std::atomic< float > hand_position_z_;
+	std::atomic< float > hand_rotation_qw_;
+	std::atomic< float > hand_rotation_qx_;
+	std::atomic< float > hand_rotation_qy_;
+	std::atomic< float > hand_rotation_qz_;
+	std::atomic< float > trigger_value_;
+	std::atomic< float > grip_value_;
 };

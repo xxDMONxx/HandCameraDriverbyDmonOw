@@ -41,6 +41,17 @@ MyControllerDeviceDriver::MyControllerDeviceDriver( vr::ETrackedControllerRole r
 		my_controller_settings_key_serial_number, serial_number, sizeof( serial_number ) );
 	my_controller_serial_number_ = serial_number;
 
+	// Initialize hand tracking data with neutral values
+	hand_position_x_ = 0.0f;
+	hand_position_y_ = 0.0f;
+	hand_position_z_ = 0.0f;
+	hand_rotation_qw_ = 1.0f;  // Identity quaternion
+	hand_rotation_qx_ = 0.0f;
+	hand_rotation_qy_ = 0.0f;
+	hand_rotation_qz_ = 0.0f;
+	trigger_value_ = 0.0f;
+	grip_value_ = 0.0f;
+
 	// Here's an example of how to use our logging wrapper around IVRDriverLog
 	// In SteamVR logs (SteamVR Hamburger Menu > Developer Settings > Web console) drivers have a prefix of
 	// "<driver_name>:". You can search this in the top search bar to find the info that you've logged.
@@ -100,6 +111,9 @@ vr::EVRInitError MyControllerDeviceDriver::Activate( uint32_t unObjectId )
 	vr::VRDriverInput()->CreateScalarComponent( container, "/input/trigger/value", &input_handles_[ MyComponent_trigger_value ], vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedOneSided );
 	vr::VRDriverInput()->CreateBooleanComponent( container, "/input/trigger/click", &input_handles_[ MyComponent_trigger_click ] );
 
+	// Create grip value component for hand tracking
+	vr::VRDriverInput()->CreateScalarComponent( container, "/input/grip/value", &input_handles_[ MyComponent_grip_value ], vr::VRScalarType_Absolute, vr::VRScalarUnits_NormalizedOneSided );
+
 	// Let's create our haptic component.
 	// These are global across the device, and you can only have one per device.
 	vr::VRDriverInput()->CreateHapticComponent( container, "/output/haptic", &input_handles_[ MyComponent_haptic ] );
@@ -158,16 +172,21 @@ vr::DriverPose_t MyControllerDeviceDriver::GetPose()
 	// Get the orientation of the hmd from the 3x4 matrix GetRawTrackedDevicePoses returns
 	const vr::HmdQuaternion_t hmd_orientation = HmdQuaternion_FromMatrix( hmd_pose.mDeviceToAbsoluteTracking );
 
-	// pitch the controller 90 degrees so the face of the controller is facing towards us
-	const vr::HmdQuaternion_t offset_orientation = HmdQuaternion_FromEulerAngles( 0.f, DEG_TO_RAD(90.f), 0.f );
+	// Use hand tracking rotation if available, otherwise use default orientation
+	vr::HmdQuaternion_t hand_rotation;
+	hand_rotation.w = hand_rotation_qw_.load();
+	hand_rotation.x = hand_rotation_qx_.load();
+	hand_rotation.y = hand_rotation_qy_.load();
+	hand_rotation.z = hand_rotation_qz_.load();
 
-	// Set the pose orientation to the hmd orientation with the offset applied.
-	pose.qRotation = hmd_orientation * offset_orientation;
+	// Apply hand rotation to the HMD orientation
+	pose.qRotation = hmd_orientation * hand_rotation;
 
+	// Use hand tracking position if available
 	const vr::HmdVector3_t offset_position = {
-		my_controller_role_ == vr::TrackedControllerRole_LeftHand ? -0.15f : 0.15f, // translate the controller left/right 0.15m depending on its role
-		0.1f,																		// shift it up a little to make it more in view
-		-0.5f,																		// put each controller 0.5m forward in front of the hmd so we can see it.
+		hand_position_x_.load(),
+		hand_position_y_.load(),
+		hand_position_z_.load()
 	};
 
 	// Rotate our offset by the hmd quaternion (so the controllers are always facing towards us), and add then add the position of the hmd to put it into position.
@@ -244,18 +263,20 @@ void MyControllerDeviceDriver::Deactivate()
 //-----------------------------------------------------------------------------
 void MyControllerDeviceDriver::MyRunFrame()
 {
-	// Update our inputs here. For actual inputs coming from hardware, these will probably be read in a separate thread.
+	// Update our inputs here with data from hand tracking
+	float trigger_val = trigger_value_.load();
+	float grip_val = grip_value_.load();
+
+	// Update trigger
+	vr::VRDriverInput()->UpdateScalarComponent( input_handles_[ MyComponent_trigger_value ], trigger_val, 0 );
+	vr::VRDriverInput()->UpdateBooleanComponent( input_handles_[ MyComponent_trigger_click ], trigger_val > 0.5f, 0 );
+
+	// Update grip
+	vr::VRDriverInput()->UpdateScalarComponent( input_handles_[ MyComponent_grip_value ], grip_val, 0 );
+
+	// Update A button based on gesture (you could map specific gestures here)
 	vr::VRDriverInput()->UpdateBooleanComponent( input_handles_[ MyComponent_a_click ], false, 0 );
 	vr::VRDriverInput()->UpdateBooleanComponent( input_handles_[ MyComponent_a_touch ], false, 0 );
-
-	vr::VRDriverInput()->UpdateBooleanComponent( input_handles_[ MyComponent_trigger_click ], false, 0 );
-	vr::VRDriverInput()->UpdateScalarComponent( input_handles_[ MyComponent_trigger_value ], 0.f, 0 );
-
-	//if we wanted to set the trigger value to 1, we could do:
-	// vr::VRDriverInput()->UpdateScalarComponent( input_handles_[ MyComponent_trigger_value ], 1.f, 0 );
-
-	// or say that the A button has been clicked:
-	// vr::VRDriverInput()->UpdateBooleanComponent( input_handles_[ MyComponent_a_click ], true, 0 );
 }
 
 
@@ -300,4 +321,41 @@ void MyControllerDeviceDriver::MyProcessEvent( const vr::VREvent_t &vrevent )
 const std::string &MyControllerDeviceDriver::MyGetSerialNumber()
 {
 	return my_controller_serial_number_;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Update hand position from hand tracking data
+//-----------------------------------------------------------------------------
+void MyControllerDeviceDriver::UpdateHandPosition( float x, float y, float z )
+{
+	hand_position_x_.store( x );
+	hand_position_y_.store( y );
+	hand_position_z_.store( z );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Update hand rotation from hand tracking data
+//-----------------------------------------------------------------------------
+void MyControllerDeviceDriver::UpdateHandRotation( float qw, float qx, float qy, float qz )
+{
+	hand_rotation_qw_.store( qw );
+	hand_rotation_qx_.store( qx );
+	hand_rotation_qy_.store( qy );
+	hand_rotation_qz_.store( qz );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Update trigger value from gesture detection
+//-----------------------------------------------------------------------------
+void MyControllerDeviceDriver::UpdateTriggerValue( float value )
+{
+	trigger_value_.store( value );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Update grip value from gesture detection
+//-----------------------------------------------------------------------------
+void MyControllerDeviceDriver::UpdateGripValue( float value )
+{
+	grip_value_.store( value );
 }
